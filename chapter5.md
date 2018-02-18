@@ -1653,3 +1653,281 @@ popular_dests <- flights %>%
   group_by(dest) %>%
   filter(n() > 365)
 ```
+
+### Standartise to computer per group metrics
+
+``` r
+popular_dests %>%
+  filter(arr_delay > 0) %>%
+  mutate(prop_delay = arr_delay / sum(arr_delay)) %>%
+  select(year:day, dest, arr_delay, prop_delay)
+```
+
+    ## # A tibble: 131,106 x 6
+    ## # Groups:   dest [77]
+    ##     year month   day  dest arr_delay   prop_delay
+    ##    <int> <int> <int> <chr>     <dbl>        <dbl>
+    ##  1  2013     1     1   IAH        11 1.106740e-04
+    ##  2  2013     1     1   IAH        20 2.012255e-04
+    ##  3  2013     1     1   MIA        33 2.350026e-04
+    ##  4  2013     1     1   ORD        12 4.239594e-05
+    ##  5  2013     1     1   FLL        19 9.377853e-05
+    ##  6  2013     1     1   ORD         8 2.826396e-05
+    ##  7  2013     1     1   LAX         7 3.444441e-05
+    ##  8  2013     1     1   DFW        31 2.817951e-04
+    ##  9  2013     1     1   ATL        12 3.996017e-05
+    ## 10  2013     1     1   DTW        16 1.157257e-04
+    ## # ... with 131,096 more rows
+
+### 5.7.1 Exercises
+
+#### 1. Refer back to the lists of useful mutate and filtering functions. Describe how each operation changes when you combine it with grouping.
+
+#### 2. Which plane (tailnum) has the worst on-time record?
+
+``` r
+flights %>%
+  group_by(tailnum) %>%
+  summarise(on_time_rec = max(arr_delay)) %>%
+  arrange(desc(on_time_rec))
+```
+
+    ## # A tibble: 4,044 x 2
+    ##    tailnum on_time_rec
+    ##      <chr>       <dbl>
+    ##  1  N384HA        1272
+    ##  2  N665MQ         989
+    ##  3  N959DL         931
+    ##  4  N927DA         915
+    ##  5  N6716C         895
+    ##  6  N5DMAA         878
+    ##  7  N375NC         847
+    ##  8  N203FR         834
+    ##  9  N3GJAA         783
+    ## 10  N324US         767
+    ## # ... with 4,034 more rows
+
+#### 3. What time of day should you fly if you want to avoid delays as much as possible?
+
+``` r
+flights %>%
+  group_by(dep_time) %>%
+  summarise(ar_del = min(arr_delay, na.rm=T),
+            dep_del = min(dep_delay, nar.rm=T)) %>%
+  arrange(desc(ar_del), desc(dep_del))
+```
+
+    ## Warning in min(arr_delay, na.rm = T): aucun argument trouvé pour min ; Inf
+    ## est renvoyé
+
+    ## Warning in min(arr_delay, na.rm = T): aucun argument trouvé pour min ; Inf
+    ## est renvoyé
+
+    ## # A tibble: 1,319 x 3
+    ##    dep_time ar_del dep_del
+    ##       <int>  <dbl>   <dbl>
+    ##  1      251    Inf       1
+    ##  2       NA    Inf      NA
+    ##  3      353    493       1
+    ##  4      226    420       1
+    ##  5      241    385       1
+    ##  6      229    373       1
+    ##  7      133    356       1
+    ##  8      245    355       1
+    ##  9      325    354       1
+    ## 10      210    331       1
+    ## # ... with 1,309 more rows
+
+#### 4. For each destination, compute the total minutes of delay. For each, flight, compute the proportion of the total delay for its destination.
+
+###### Here we will use arr\_delay, dep\_delay and sum of arr\_delay and dep\_delay separately
+
+``` r
+flights %>%
+  filter(arr_delay > 0, dep_delay > 0) %>%
+  select(dest, flight, arr_delay, dep_delay) %>%
+  group_by(dest) %>%
+  mutate(total_delay_dest = sum(arr_delay) + sum(dep_delay)) %>%
+  group_by(flight) %>%
+  mutate(proportion = round(((arr_delay + dep_delay) / total_delay_dest)*100, 5)) %>%
+  arrange(desc(proportion))
+```
+
+    ## # A tibble: 92,303 x 6
+    ## # Groups:   flight [3,321]
+    ##     dest flight arr_delay dep_delay total_delay_dest proportion
+    ##    <chr>  <int>     <dbl>     <dbl>            <dbl>      <dbl>
+    ##  1   PSP     55         1        10               11  100.00000
+    ##  2   ANC    887        39        75              147   77.55102
+    ##  3   MTJ    385       101       122              341   65.39589
+    ##  4   SBN   5383        53        68              302   40.06623
+    ##  5   SBN   5383        50        67              302   38.74172
+    ##  6   BZN    568       154       165              825   38.66667
+    ##  7   EYW   1873        31        40              223   31.83857
+    ##  8   JAC   1506       175       198             1177   31.69074
+    ##  9   HDN    355        32        46              265   29.43396
+    ## 10   EYW   1873        45        13              223   26.00897
+    ## # ... with 92,293 more rows
+
+#### 5. Delays are typically temporally correlated: even once the problem that caused the initial delay has been resolved, later flights are delayed to allow earlier flights to leave. Using lag() explore how the delay of a flight is related to the delay of the immediately preceding flight.
+
+``` r
+flights %>%
+  mutate(new_sched_dep_time = lubridate::make_datetime(year, month, day, hour, minute)) %>%
+  arrange(new_sched_dep_time) %>%
+  mutate(prev_time = lag(dep_delay)) %>%
+  # filter(between(dep_delay, 0, 300), between(prev_time, 0, 300)) %>% # play with this one
+  select(origin, new_sched_dep_time, dep_delay, prev_time) %>%
+  ggplot(aes(dep_delay, prev_time)) + geom_point(alpha = 1/10) +
+  geom_smooth()
+```
+
+    ## `geom_smooth()` using method = 'gam'
+
+    ## Warning: Removed 14167 rows containing non-finite values (stat_smooth).
+
+    ## Warning: Removed 14167 rows containing missing values (geom_point).
+
+![](chapter5_files/figure-markdown_github-ascii_identifiers/unnamed-chunk-33-1.png)
+
+#### 6. Look at each destination. Can you find flights that are suspiciously fast? (i.e. flights that represent a potential data entry error). Compute the air time a flight relative to the shortest flight to that destination. Which flights were most delayed in the air?
+
+``` r
+flights %>%
+  filter(!is.na(air_time)) %>%
+  select(dest, flight, air_time) %>%
+  group_by(dest) %>%
+  mutate(shortest = min(air_time, na.rm = T)) %>%
+  group_by(flight) %>%
+  mutate(ratio = air_time / shortest) %>%
+  arrange(desc(ratio))
+```
+
+    ## # A tibble: 327,346 x 5
+    ## # Groups:   flight [3,835]
+    ##     dest flight air_time shortest    ratio
+    ##    <chr>  <int>    <dbl>    <dbl>    <dbl>
+    ##  1   BOS   1703      112       21 5.333333
+    ##  2   BOS   2136      107       21 5.095238
+    ##  3   BOS   2480       99       21 4.714286
+    ##  4   BOS   1750       96       21 4.571429
+    ##  5   BOS   1248       92       21 4.380952
+    ##  6   BOS   1006       91       21 4.333333
+    ##  7   BOS   3422       86       21 4.095238
+    ##  8   BOS   1850       86       21 4.095238
+    ##  9   DCA   2175      131       32 4.093750
+    ## 10   ACK   1491      141       35 4.028571
+    ## # ... with 327,336 more rows
+
+``` r
+# (1)
+flights %>%
+  group_by(dest) %>%
+  arrange(air_time) %>%
+  slice(1:5) %>%
+  select(tailnum, sched_dep_time, sched_arr_time, air_time) %>%
+  arrange(air_time)
+```
+
+    ## Adding missing grouping variables: `dest`
+
+    ## # A tibble: 517 x 5
+    ## # Groups:   dest [105]
+    ##     dest tailnum sched_dep_time sched_arr_time air_time
+    ##    <chr>   <chr>          <int>          <int>    <dbl>
+    ##  1   BDL  N16911           1315           1411       20
+    ##  2   BDL  N12167            527            628       20
+    ##  3   BDL  N27200            851            954       21
+    ##  4   BDL  N13955           1315           1411       21
+    ##  5   BDL  N12160           1329           1426       21
+    ##  6   BOS  N947UW           1500           1608       21
+    ##  7   PHL  N13913           2129           2224       21
+    ##  8   PHL  N12921           2130           2225       21
+    ##  9   PHL  N8501F           1935           2056       21
+    ## 10   PHL  N22909           2129           2224       22
+    ## # ... with 507 more rows
+
+``` r
+flights %>%
+  filter(!is.na(air_time)) %>%
+  group_by(dest) %>%
+  mutate(shortest = air_time - min(air_time, na.rm = T)) %>%
+  top_n(1, air_time) %>%
+  arrange(-air_time) %>%
+  select(tailnum, sched_dep_time, sched_arr_time, shortest)
+```
+
+    ## Adding missing grouping variables: `dest`
+
+    ## # A tibble: 112 x 5
+    ## # Groups:   dest [104]
+    ##     dest tailnum sched_dep_time sched_arr_time shortest
+    ##    <chr>   <chr>          <int>          <int>    <dbl>
+    ##  1   HNL  N77066           1335           1836      133
+    ##  2   SFO  N703TW           1730           2110      195
+    ##  3   LAX  N178DN           1815           2146      165
+    ##  4   ANC  N572UA           1615           1953       46
+    ##  5   SAN  N794JB           1620           1934      134
+    ##  6   SNA  N16709           1819           2137      131
+    ##  7   BUR  N624JB           1730           2046      110
+    ##  8   LAS  N852UA           1729           2013      143
+    ##  9   SJC  N632JB           1830           2205       91
+    ## 10   SEA  N17245           1727           2040      119
+    ## # ... with 102 more rows
+
+#### 7. Find all destinations that are flown by at least two carriers. Use that information to rank the carriers.
+
+``` r
+flights %>%
+  select(dest, carrier) %>%
+  group_by(dest) %>%
+  filter(n_distinct(carrier) > 2) %>%
+  group_by(carrier) %>%
+  summarise(n = n_distinct(dest)) %>%
+  arrange(-n)
+```
+
+    ## # A tibble: 15 x 2
+    ##    carrier     n
+    ##      <chr> <int>
+    ##  1      DL    37
+    ##  2      EV    36
+    ##  3      UA    36
+    ##  4      9E    35
+    ##  5      B6    30
+    ##  6      AA    17
+    ##  7      MQ    17
+    ##  8      WN     9
+    ##  9      OO     5
+    ## 10      US     5
+    ## 11      VX     3
+    ## 12      YV     3
+    ## 13      FL     2
+    ## 14      AS     1
+    ## 15      F9     1
+
+#### 8. For each plane, count the number of flights before the first delay of greater than 1 hour.
+
+``` r
+flights %>%
+  filter(!is.na(arr_delay), arr_delay > 0, arr_delay < 60) %>%
+  select(flight, tailnum, arr_delay) %>%
+  group_by(tailnum) %>%
+  summarise(count = n()) %>%
+  arrange(desc(count))
+```
+
+    ## # A tibble: 3,815 x 2
+    ##    tailnum count
+    ##      <chr> <int>
+    ##  1  N725MQ   177
+    ##  2  N228JB   146
+    ##  3  N534MQ   146
+    ##  4  N711MQ   146
+    ##  5  N258JB   145
+    ##  6  N542MQ   143
+    ##  7  N6EAMQ   143
+    ##  8  N713MQ   143
+    ##  9  N723MQ   138
+    ## 10  N523MQ   137
+    ## # ... with 3,805 more rows
